@@ -1,4 +1,5 @@
 
+import "./global.css";
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Alert, BackHandler, StyleSheet, View } from 'react-native';
@@ -9,6 +10,7 @@ import {
   finalizeGroup,
   getGroupDetails,
 } from './src/repositories/groupRepository';
+
 import {
   getProviderById,
   getProviders,
@@ -23,30 +25,43 @@ import HomeScreen from './src/screens/HomeScreen';
 import JoinGroupOrderScreen from './src/screens/JoinGroupOrderScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import MenuScreen from './src/screens/MenuScreen';
+import NotificationsScreen from './src/screens/NotificationsScreen';
+import OrderHistoryScreen from './src/screens/OrderHistoryScreen';
 import OrderTrackingScreen from './src/screens/OrderTrackingScreen';
 import ParticipantsInvitationsScreen from './src/screens/ParticipantsInvitationsScreen';
 import ProviderDiscoveryScreen from './src/screens/ProviderDiscoveryScreen';
 import RestaurantDetailsScreen from './src/screens/RestaurantDetailsScreen';
+import SettingsScreen from './src/screens/SettingsScreen';
 import ShoppingCartScreen from './src/screens/ShoppingCartScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
+import UserProfileScreen from './src/screens/UserProfileScreen';
 
+// Custom navigation stack for the UI prototype.
 export default function App() {
-  const [stack, setStack] = useState([{ name: 'login', params: {} }]);
+  const [stack, setStack] = useState([
+    { name: 'login', params: {} },
+  ]);
+
   const [user, setUser] = useState(null);
 
-  // Student 3: in-memory order state for the UI prototype.
+  // Student 3: temporary in-memory cart and checkout state.
   const [cartItems, setCartItems] = useState([]);
   const [isGroupOrder, setIsGroupOrder] = useState(false);
   const [deliveryAddress, setDeliveryAddress] = useState(null);
   const [activeRestaurant, setActiveRestaurant] = useState(null);
 
   const navigate = (name, params = {}) => {
-    setStack((previous) => [...previous, { name, params }]);
+    setStack((previous) => [
+      ...previous,
+      { name, params },
+    ]);
   };
 
   const goBack = () => {
     setStack((previous) =>
-      previous.length > 1 ? previous.slice(0, -1) : previous
+      previous.length > 1
+        ? previous.slice(0, -1)
+        : previous
     );
   };
 
@@ -54,7 +69,6 @@ export default function App() {
     setStack([{ name, params: {} }]);
   };
 
-  // Replace the current screen after a form succeeds.
   const replaceTop = (name, params = {}) => {
     setStack((previous) => [
       ...previous.slice(0, -1),
@@ -62,8 +76,18 @@ export default function App() {
     ]);
   };
 
-  // Add a menu item to the current user's cart.
-  // Prices remain integer piasters, as used by mockData.js.
+  const handleAuthenticated = (authenticatedUser) => {
+    setUser(authenticatedUser);
+    resetTo('home');
+  };
+
+  const handleSignOut = () => {
+    setUser(null);
+    resetTo('login');
+  };
+
+  // Add a menu item to the cart.
+  // Prices are stored as integer piasters in the mock data.
   const addToCart = (item, providerId) => {
     const provider = getProviderById(providerId);
 
@@ -133,11 +157,6 @@ export default function App() {
     );
   };
 
-  const handleAuthenticated = (authenticatedUser) => {
-    setUser(authenticatedUser);
-    resetTo('home');
-  };
-
   // Android hardware back button.
   useEffect(() => {
     const subscription = BackHandler.addEventListener(
@@ -147,6 +166,7 @@ export default function App() {
           goBack();
           return true;
         }
+
         return false;
       }
     );
@@ -156,6 +176,14 @@ export default function App() {
 
   const renderRoute = ({ name, params }) => {
     switch (name) {
+      case 'login':
+        return (
+          <LoginScreen
+            onLogin={handleAuthenticated}
+            onGoToSignUp={() => resetTo('signup')}
+          />
+        );
+
       case 'signup':
         return (
           <SignUpScreen
@@ -168,13 +196,21 @@ export default function App() {
         return (
           <HomeScreen
             user={user}
-            onSearchPress={() => navigate('browse', { focusSearch: true })}
-            onCuisinePress={(cuisine) => navigate('browse', { cuisine })}
+            onSearchPress={() =>
+              navigate('browse', { focusSearch: true })
+            }
+            onCuisinePress={(cuisine) =>
+              navigate('browse', { cuisine })
+            }
             onBrowsePress={() => navigate('browse')}
             onProviderPress={(providerId) =>
               navigate('details', { providerId })
             }
             onGroupOrderPress={() => navigate('providers')}
+            onProfilePress={() => navigate('userProfile')}
+            onOrderHistoryPress={() => navigate('orderHistory')}
+            onNotificationsPress={() => navigate('notifications')}
+            onSettingsPress={() => navigate('settings')}
           />
         );
 
@@ -208,7 +244,9 @@ export default function App() {
           <MenuScreen
             providerId={params.providerId}
             onBack={goBack}
-            onAddToCart={(item) => addToCart(item, params.providerId)}
+            onAddToCart={(item) =>
+              addToCart(item, params.providerId)
+            }
             onViewCart={() => navigate('shoppingCart')}
           />
         );
@@ -221,12 +259,16 @@ export default function App() {
             onBack={goBack}
             onJoinPress={() => navigate('joinGroup')}
             onProviderPress={(provider) =>
-              navigate('details', { providerId: provider.providerId })
+              navigate('details', {
+                providerId: provider.providerId,
+              })
             }
             onStartGroup={(provider) => {
               setIsGroupOrder(true);
               setActiveRestaurant(provider);
-              navigate('createGroup', { providerId: provider.providerId });
+              navigate('createGroup', {
+                providerId: provider.providerId,
+              });
             }}
           />
         );
@@ -238,6 +280,14 @@ export default function App() {
             onBack={goBack}
             onJoined={(groupCode) => {
               setIsGroupOrder(true);
+
+              const group = getGroupDetails(groupCode);
+              if (group) {
+                setActiveRestaurant(
+                  getProviderById(group.providerId)
+                );
+              }
+
               replaceTop('groupDetails', { groupCode });
             }}
           />
@@ -245,7 +295,10 @@ export default function App() {
 
       case 'groupDetails': {
         const group = getGroupDetails(params.groupCode);
-        const refresh = () => setStack((previous) => [...previous]);
+
+        const refresh = () => {
+          setStack((previous) => [...previous]);
+        };
 
         return (
           <GroupOrderDetailsScreen
@@ -254,14 +307,24 @@ export default function App() {
             onBack={goBack}
             onViewMenu={() => {
               setIsGroupOrder(true);
-              setActiveRestaurant(getProviderById(group?.providerId));
-              navigate('menu', { providerId: group?.providerId });
+              setActiveRestaurant(
+                getProviderById(group?.providerId)
+              );
+              navigate('menu', {
+                providerId: group?.providerId,
+              });
             }}
             onViewParticipants={() =>
-              navigate('participants', { groupCode: params.groupCode })
+              navigate('participants', {
+                groupCode: params.groupCode,
+              })
             }
             onFinalize={() => {
-              const { error } = finalizeGroup(params.groupCode, user);
+              const { error } = finalizeGroup(
+                params.groupCode,
+                user
+              );
+
               if (error) {
                 Alert.alert('Could not finalize', error);
               } else {
@@ -269,7 +332,11 @@ export default function App() {
               }
             }}
             onCancel={() => {
-              const { error } = cancelGroup(params.groupCode, user);
+              const { error } = cancelGroup(
+                params.groupCode,
+                user
+              );
+
               if (error) {
                 Alert.alert('Could not cancel', error);
               } else {
@@ -302,8 +369,13 @@ export default function App() {
               });
 
               setIsGroupOrder(true);
-              setActiveRestaurant(getProviderById(group.providerId));
-              replaceTop('groupDetails', { groupCode: group.code });
+              setActiveRestaurant(
+                getProviderById(group.providerId)
+              );
+
+              replaceTop('groupDetails', {
+                groupCode: group.code,
+              });
             }}
           />
         );
@@ -315,7 +387,9 @@ export default function App() {
             cartItems={cartItems}
             isGroupOrder={isGroupOrder}
             userName={user?.displayName ?? 'You'}
-            restaurantName={activeRestaurant?.name ?? 'Your restaurant'}
+            restaurantName={
+              activeRestaurant?.name ?? 'Your restaurant'
+            }
             onBack={goBack}
             onChangeQuantity={changeCartQuantity}
             onRemoveItem={removeCartItem}
@@ -332,19 +406,21 @@ export default function App() {
           />
         );
 
-      // Student 3: group order summary.
+      // Student 3: order summary.
       case 'groupSummary':
         return (
           <GroupOrderSummaryScreen
             cartItems={cartItems}
             isGroupOrder={isGroupOrder}
-            restaurantName={activeRestaurant?.name ?? 'Cairo Koshary House'}
+            restaurantName={
+              activeRestaurant?.name ?? 'Cairo Koshary House'
+            }
             onBack={goBack}
             onContinue={() => navigate('deliveryAddress')}
           />
         );
 
-      // Student 3: delivery details.
+      // Student 3: delivery address.
       case 'deliveryAddress':
         return (
           <DeliveryAddressScreen
@@ -372,7 +448,45 @@ export default function App() {
           />
         );
 
-      case 'login':
+      // Student 4: profile.
+      case 'userProfile':
+        return (
+          <UserProfileScreen
+            user={user}
+            onBack={goBack}
+            onSave={(updatedUser) => setUser(updatedUser)}
+          />
+        );
+
+      // Student 4: settings and sign out.
+      case 'settings':
+        return (
+          <SettingsScreen
+            onBack={goBack}
+            onSignOut={handleSignOut}
+          />
+        );
+
+      // Student 4: order history.
+      case 'orderHistory':
+        return (
+          <OrderHistoryScreen
+            onBack={goBack}
+            onReorder={(order) => {
+              Alert.alert(
+                'Reorder',
+                `You selected your order from ${order.restaurant}.`
+              );
+            }}
+          />
+        );
+
+      // Student 4: notifications.
+      case 'notifications':
+        return (
+          <NotificationsScreen onBack={goBack} />
+        );
+
       default:
         return (
           <LoginScreen
@@ -383,17 +497,22 @@ export default function App() {
     }
   };
 
-  // Keep previous screens mounted so their local UI state is preserved.
+  // Keep previous screens mounted to preserve their local UI state.
   return (
     <>
       {stack.map((route, index) => (
         <View
           key={`${index}-${route.name}`}
-          style={index === stack.length - 1 ? styles.screen : styles.hidden}
+          style={
+            index === stack.length - 1
+              ? styles.screen
+              : styles.hidden
+          }
         >
           {renderRoute(route)}
         </View>
       ))}
+
       <StatusBar style="auto" />
     </>
   );
