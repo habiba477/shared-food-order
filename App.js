@@ -1,60 +1,169 @@
+
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Alert, BackHandler, StyleSheet, View } from 'react-native';
-import { cancelGroup, createGroup, finalizeGroup, getGroupDetails } from './src/repositories/groupRepository';
-import { getProviderById, getProviders } from './src/repositories/restaurantRepository';
+
+import {
+  cancelGroup,
+  createGroup,
+  finalizeGroup,
+  getGroupDetails,
+} from './src/repositories/groupRepository';
+import {
+  getProviderById,
+  getProviders,
+} from './src/repositories/restaurantRepository';
+
 import BrowseRestaurantsScreen from './src/screens/BrowseRestaurantsScreen';
 import CreateGroupOrderScreen from './src/screens/CreateGroupOrderScreen';
+import DeliveryAddressScreen from './src/screens/DeliveryAddressScreen';
 import GroupOrderDetailsScreen from './src/screens/GroupOrderDetailsScreen';
+import GroupOrderSummaryScreen from './src/screens/GroupOrderSummaryScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import JoinGroupOrderScreen from './src/screens/JoinGroupOrderScreen';
 import LoginScreen from './src/screens/LoginScreen';
 import MenuScreen from './src/screens/MenuScreen';
+import OrderTrackingScreen from './src/screens/OrderTrackingScreen';
 import ParticipantsInvitationsScreen from './src/screens/ParticipantsInvitationsScreen';
 import ProviderDiscoveryScreen from './src/screens/ProviderDiscoveryScreen';
 import RestaurantDetailsScreen from './src/screens/RestaurantDetailsScreen';
+import ShoppingCartScreen from './src/screens/ShoppingCartScreen';
 import SignUpScreen from './src/screens/SignUpScreen';
 
-// Simple navigation without a library (none is chosen yet).
-// `stack` is a list of routes { name, params }; the last one is on screen.
-// navigate() pushes a route, goBack() pops it. Screens receive ids in
-// `params` (never copies of the data) and look the data up themselves.
-// Limits: no swipe-back gesture or animations, no deep links, and the
-// stack resets when the app reloads.
 export default function App() {
   const [stack, setStack] = useState([{ name: 'login', params: {} }]);
   const [user, setUser] = useState(null);
 
-  const navigate = (name, params = {}) =>
-    setStack((previous) => [...previous, { name, params }]);
-  const goBack = () =>
-    setStack((previous) => (previous.length > 1 ? previous.slice(0, -1) : previous));
-  const resetTo = (name) => setStack([{ name, params: {} }]);
-  // Swaps the screen on top, so Back skips a form that was already submitted.
-  const replaceTop = (name, params = {}) =>
-    setStack((previous) => [...previous.slice(0, -1), { name, params }]);
+  // Student 3: in-memory order state for the UI prototype.
+  const [cartItems, setCartItems] = useState([]);
+  const [isGroupOrder, setIsGroupOrder] = useState(false);
+  const [deliveryAddress, setDeliveryAddress] = useState(null);
+  const [activeRestaurant, setActiveRestaurant] = useState(null);
 
-  // Android hardware back button: go back a screen when there is one to go back to.
-  useEffect(() => {
-    const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (stack.length > 1) {
-        goBack();
-        return true;
+  const navigate = (name, params = {}) => {
+    setStack((previous) => [...previous, { name, params }]);
+  };
+
+  const goBack = () => {
+    setStack((previous) =>
+      previous.length > 1 ? previous.slice(0, -1) : previous
+    );
+  };
+
+  const resetTo = (name) => {
+    setStack([{ name, params: {} }]);
+  };
+
+  // Replace the current screen after a form succeeds.
+  const replaceTop = (name, params = {}) => {
+    setStack((previous) => [
+      ...previous.slice(0, -1),
+      { name, params },
+    ]);
+  };
+
+  // Add a menu item to the current user's cart.
+  // Prices remain integer piasters, as used by mockData.js.
+  const addToCart = (item, providerId) => {
+    const provider = getProviderById(providerId);
+
+    if (!provider || !provider.isAvailable || !item.isAvailable) {
+      Alert.alert(
+        'Item unavailable',
+        'This item cannot be added to your order right now.'
+      );
+      return;
+    }
+
+    if (
+      activeRestaurant &&
+      activeRestaurant.providerId !== providerId &&
+      cartItems.length > 0
+    ) {
+      Alert.alert(
+        'Different restaurant',
+        'Your cart already contains items from another restaurant. Clear the existing cart before ordering from a different restaurant.'
+      );
+      return;
+    }
+
+    setActiveRestaurant(provider);
+
+    setCartItems((previous) => {
+      const existing = previous.find(
+        (line) => line.menuItemId === item.menuItemId
+      );
+
+      if (existing) {
+        return previous.map((line) =>
+          line.menuItemId === item.menuItemId
+            ? { ...line, quantity: line.quantity + 1 }
+            : line
+        );
       }
-      return false;
+
+      return [
+        ...previous,
+        {
+          cartItemId: `${item.menuItemId}-${Date.now()}`,
+          menuItemId: item.menuItemId,
+          name: item.name,
+          price: item.price,
+          quantity: 1,
+        },
+      ];
     });
-    return () => subscription.remove();
-  }, [stack.length]);
+  };
+
+  const changeCartQuantity = (cartItemId, amount) => {
+    setCartItems((previous) =>
+      previous
+        .map((line) =>
+          line.cartItemId === cartItemId
+            ? { ...line, quantity: line.quantity + amount }
+            : line
+        )
+        .filter((line) => line.quantity > 0)
+    );
+  };
+
+  const removeCartItem = (cartItemId) => {
+    setCartItems((previous) =>
+      previous.filter((line) => line.cartItemId !== cartItemId)
+    );
+  };
 
   const handleAuthenticated = (authenticatedUser) => {
     setUser(authenticatedUser);
     resetTo('home');
   };
 
+  // Android hardware back button.
+  useEffect(() => {
+    const subscription = BackHandler.addEventListener(
+      'hardwareBackPress',
+      () => {
+        if (stack.length > 1) {
+          goBack();
+          return true;
+        }
+        return false;
+      }
+    );
+
+    return () => subscription.remove();
+  }, [stack.length]);
+
   const renderRoute = ({ name, params }) => {
     switch (name) {
       case 'signup':
-        return <SignUpScreen onSignUp={handleAuthenticated} onGoToLogin={() => resetTo('login')} />;
+        return (
+          <SignUpScreen
+            onSignUp={handleAuthenticated}
+            onGoToLogin={() => resetTo('login')}
+          />
+        );
+
       case 'home':
         return (
           <HomeScreen
@@ -62,29 +171,48 @@ export default function App() {
             onSearchPress={() => navigate('browse', { focusSearch: true })}
             onCuisinePress={(cuisine) => navigate('browse', { cuisine })}
             onBrowsePress={() => navigate('browse')}
-            onProviderPress={(providerId) => navigate('details', { providerId })}
+            onProviderPress={(providerId) =>
+              navigate('details', { providerId })
+            }
             onGroupOrderPress={() => navigate('providers')}
           />
         );
+
       case 'browse':
         return (
           <BrowseRestaurantsScreen
             initialCuisine={params.cuisine ?? null}
             autoFocusSearch={Boolean(params.focusSearch)}
             onBack={goBack}
-            onProviderPress={(providerId) => navigate('details', { providerId })}
+            onProviderPress={(providerId) =>
+              navigate('details', { providerId })
+            }
           />
         );
+
       case 'details':
         return (
           <RestaurantDetailsScreen
             providerId={params.providerId}
             onBack={goBack}
-            onViewMenu={(providerId) => navigate('menu', { providerId })}
+            onViewMenu={(providerId) => {
+              setIsGroupOrder(false);
+              setActiveRestaurant(getProviderById(providerId));
+              navigate('menu', { providerId });
+            }}
           />
         );
+
       case 'menu':
-        return <MenuScreen providerId={params.providerId} onBack={goBack} />;
+        return (
+          <MenuScreen
+            providerId={params.providerId}
+            onBack={goBack}
+            onAddToCart={(item) => addToCart(item, params.providerId)}
+            onViewCart={() => navigate('shoppingCart')}
+          />
+        );
+
       case 'providers':
         return (
           <ProviderDiscoveryScreen
@@ -92,41 +220,66 @@ export default function App() {
             providers={getProviders()}
             onBack={goBack}
             onJoinPress={() => navigate('joinGroup')}
-            onProviderPress={(provider) => navigate('details', { providerId: provider.providerId })}
-            onStartGroup={(provider) => navigate('createGroup', { providerId: provider.providerId })}
+            onProviderPress={(provider) =>
+              navigate('details', { providerId: provider.providerId })
+            }
+            onStartGroup={(provider) => {
+              setIsGroupOrder(true);
+              setActiveRestaurant(provider);
+              navigate('createGroup', { providerId: provider.providerId });
+            }}
           />
         );
+
       case 'joinGroup':
         return (
           <JoinGroupOrderScreen
             user={user}
             onBack={goBack}
-            onJoined={(groupCode) => replaceTop('groupDetails', { groupCode })}
+            onJoined={(groupCode) => {
+              setIsGroupOrder(true);
+              replaceTop('groupDetails', { groupCode });
+            }}
           />
         );
+
       case 'groupDetails': {
         const group = getGroupDetails(params.groupCode);
-        // Finalizing or cancelling changes the stored group in place, so
-        // re-render the stack to show the new status.
         const refresh = () => setStack((previous) => [...previous]);
+
         return (
           <GroupOrderDetailsScreen
             group={group}
             currentUserId={user?.userId}
             onBack={goBack}
-            onViewMenu={() => navigate('menu', { providerId: group?.providerId })}
-            onViewParticipants={() => navigate('participants', { groupCode: params.groupCode })}
+            onViewMenu={() => {
+              setIsGroupOrder(true);
+              setActiveRestaurant(getProviderById(group?.providerId));
+              navigate('menu', { providerId: group?.providerId });
+            }}
+            onViewParticipants={() =>
+              navigate('participants', { groupCode: params.groupCode })
+            }
             onFinalize={() => {
               const { error } = finalizeGroup(params.groupCode, user);
-              error ? Alert.alert('Could not finalize', error) : refresh();
+              if (error) {
+                Alert.alert('Could not finalize', error);
+              } else {
+                refresh();
+              }
             }}
             onCancel={() => {
               const { error } = cancelGroup(params.groupCode, user);
-              error ? Alert.alert('Could not cancel', error) : refresh();
+              if (error) {
+                Alert.alert('Could not cancel', error);
+              } else {
+                refresh();
+              }
             }}
           />
         );
       }
+
       case 'participants':
         return (
           <ParticipantsInvitationsScreen
@@ -135,6 +288,7 @@ export default function App() {
             onBack={goBack}
           />
         );
+
       case 'createGroup':
         return (
           <CreateGroupOrderScreen
@@ -142,19 +296,94 @@ export default function App() {
             provider={getProviderById(params.providerId)}
             onBack={goBack}
             onCreate={(groupData) => {
-              const group = createGroup({ ...groupData, organizer: user });
+              const group = createGroup({
+                ...groupData,
+                organizer: user,
+              });
+
+              setIsGroupOrder(true);
+              setActiveRestaurant(getProviderById(group.providerId));
               replaceTop('groupDetails', { groupCode: group.code });
             }}
           />
         );
+
+      // Student 3: shopping cart.
+      case 'shoppingCart':
+        return (
+          <ShoppingCartScreen
+            cartItems={cartItems}
+            isGroupOrder={isGroupOrder}
+            userName={user?.displayName ?? 'You'}
+            restaurantName={activeRestaurant?.name ?? 'Your restaurant'}
+            onBack={goBack}
+            onChangeQuantity={changeCartQuantity}
+            onRemoveItem={removeCartItem}
+            onBrowseMenu={() => {
+              if (activeRestaurant) {
+                navigate('menu', {
+                  providerId: activeRestaurant.providerId,
+                });
+              } else {
+                navigate('browse');
+              }
+            }}
+            onContinue={() => navigate('groupSummary')}
+          />
+        );
+
+      // Student 3: group order summary.
+      case 'groupSummary':
+        return (
+          <GroupOrderSummaryScreen
+            cartItems={cartItems}
+            isGroupOrder={isGroupOrder}
+            restaurantName={activeRestaurant?.name ?? 'Cairo Koshary House'}
+            onBack={goBack}
+            onContinue={() => navigate('deliveryAddress')}
+          />
+        );
+
+      // Student 3: delivery details.
+      case 'deliveryAddress':
+        return (
+          <DeliveryAddressScreen
+            onBack={goBack}
+            onConfirm={(address) => {
+              setDeliveryAddress(address);
+              navigate('orderTracking');
+            }}
+          />
+        );
+
+      // Student 3: prototype order tracking.
+      case 'orderTracking':
+        return (
+          <OrderTrackingScreen
+            address={deliveryAddress}
+            onBack={goBack}
+            onFinish={() => {
+              setCartItems([]);
+              setDeliveryAddress(null);
+              setIsGroupOrder(false);
+              setActiveRestaurant(null);
+              resetTo('home');
+            }}
+          />
+        );
+
       case 'login':
       default:
-        return <LoginScreen onLogin={handleAuthenticated} onGoToSignUp={() => resetTo('signup')} />;
+        return (
+          <LoginScreen
+            onLogin={handleAuthenticated}
+            onGoToSignUp={() => resetTo('signup')}
+          />
+        );
     }
   };
 
-  // Every screen in the stack stays mounted; only the top one is visible.
-  // This keeps things like Browse's search text and filter when you come back.
+  // Keep previous screens mounted so their local UI state is preserved.
   return (
     <>
       {stack.map((route, index) => (

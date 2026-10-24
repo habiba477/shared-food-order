@@ -1,30 +1,61 @@
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+
+import {
+  Modal,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from 'react-native';
+
 import { colors, radius, spacing, typography } from '../theme/theme';
 import { formatPrice } from '../utils/format';
 import AppButton from './AppButton';
 import StatusBadge from './StatusBadge';
 
-// Bottom sheet with a food item's details. It is shown whenever `item` is set,
-// and closes through onClose (Close button, tapping outside, or Android back).
-// If the restaurant is unavailable, the item's own "Available" badge would be
-// misleading, so a note says it can't be ordered instead.
-export default function FoodDetailsModal({ item, restaurantAvailable = true, onClose }) {
+export default function FoodDetailsModal({
+  item,
+  restaurantAvailable = true,
+  onClose,
+  onAddToCart,
+}) {
+  const itemOrderable = Boolean(
+    item && restaurantAvailable && item.isAvailable
+  );
+
   return (
-    <Modal visible={Boolean(item)} transparent animationType="slide" onRequestClose={onClose}>
+    <Modal
+      visible={Boolean(item)}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
       <Pressable
         style={styles.overlay}
         onPress={onClose}
         accessibilityLabel="Close food details"
       >
-        {/* The inner Pressable stops taps on the sheet from reaching the overlay. */}
-        <Pressable style={styles.sheet} onPress={() => {}}>
+        {/* Prevent taps inside the sheet from closing the modal. */}
+        <Pressable
+          style={styles.sheet}
+          onPress={() => {}}
+        >
           {item && (
             <View>
-              <Text style={styles.category}>{item.category.toUpperCase()}</Text>
-              <Text style={styles.name} accessibilityRole="header">
+              <Text style={styles.category}>
+                {item.category.toUpperCase()}
+              </Text>
+
+              <Text
+                style={styles.name}
+                accessibilityRole="header"
+              >
                 {item.name}
               </Text>
-              <Text style={styles.price}>{formatPrice(item.price)}</Text>
+
+              <Text style={styles.price}>
+                {formatPrice(item.price)}
+              </Text>
+
               <View style={styles.badgeRow}>
                 {restaurantAvailable ? (
                   <StatusBadge isAvailable={item.isAvailable} />
@@ -34,8 +65,27 @@ export default function FoodDetailsModal({ item, restaurantAvailable = true, onC
                   </Text>
                 )}
               </View>
-              <Text style={styles.description}>{item.description}</Text>
-              <AppButton title="Close" variant="secondary" onPress={onClose} />
+
+              <Text style={styles.description}>
+                {item.description}
+              </Text>
+
+              {itemOrderable && (
+                <View style={styles.buttonSpacing}>
+                  <AppButton
+                    title="Add to cart"
+                    onPress={() => onAddToCart?.(item)}
+                  />
+                </View>
+              )}
+
+              <View style={styles.buttonSpacing}>
+                <AppButton
+                  title="Close"
+                  variant="secondary"
+                  onPress={onClose}
+                />
+              </View>
             </View>
           )}
         </Pressable>
@@ -81,5 +131,8 @@ const styles = StyleSheet.create({
     ...typography.body,
     color: colors.textMuted,
     marginVertical: spacing.md,
+  },
+  buttonSpacing: {
+    marginTop: spacing.sm,
   },
 });
